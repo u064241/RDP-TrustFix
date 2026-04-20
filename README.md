@@ -23,37 +23,65 @@ Both dialogs require manual confirmation on every launch, which is disruptive in
 ## Usage
 
 ```powershell
-# Suppress consent dialog only (no admin required)
+# Open interactive menu (default — no parameters)
 .\Remove-RdpWarnings.ps1
 
-# Suppress consent dialog + add all servers from .rdp files to trusted list
+# Show inline help
+.\Remove-RdpWarnings.ps1 -Help
+
+# Suppress consent dialog only (registry fix, no prompts)
+.\Remove-RdpWarnings.ps1 -NoMenu
+
+# Consent fix + add all servers from .rdp files to trusted list
 .\Remove-RdpWarnings.ps1 -RdpFolder "C:\RDP"
 
-# Full fix: consent + per-server trust + self-signed cert + sign all .rdp files
-.\Remove-RdpWarnings.ps1 -RdpFolder "C:\RDP" -SignFiles
+# Full fix: auto-scan common locations + sign all .rdp files found
+.\Remove-RdpWarnings.ps1 -AutoScan -SignFiles
+
+# Full fix: specific folder + auto-scan combined + signing
+.\Remove-RdpWarnings.ps1 -RdpFolder "C:\RDP" -AutoScan -SignFiles
 
 # Custom certificate subject name
-.\Remove-RdpWarnings.ps1 -RdpFolder "C:\RDP" -SignFiles -CertSubject "MyCompany RDP"
+.\Remove-RdpWarnings.ps1 -AutoScan -SignFiles -CertSubject "MyCompany RDP"
 
 # Revert all registry changes
 .\Remove-RdpWarnings.ps1 -Undo
 ```
 
+### Interactive menu
+
+Running the script with no parameters opens a numbered menu:
+
+```
+  [1] Registry only                         Suppress consent dialog (fastest, no .rdp files needed)
+  [2] Registry + specific folder            You provide the folder path — adds servers to whitelist
+  [3] Registry + auto-scan                  Scan Desktop/Documents/Downloads/OneDrive automatically
+  [4] Full fix — specific folder + sign     Folder path, cert creation, .rdp file signing
+  [5] Full fix — auto-scan + sign           Auto-scan all locations, cert creation, .rdp file signing
+  [6] Full fix — auto-scan + folder + sign  Combined: auto-scan AND specific folder + signing
+  [U] Undo                                  Revert all registry changes made by this script
+  [H] Help                                  Show full help and documentation
+  [Q] Quit
+```
+
 ## What the script does
 
-### Mode 1 — Registry only (default)
+### Mode 1 — Registry only
 Sets two HKCU registry values under `Software\Microsoft\Terminal Server Client`:
 - `RdpLaunchConsentAccepted = 1`
 - `RedirectionWarningDialogVersion = 1`
 
-### Mode 2 — Per-server trust (`-RdpFolder`)
-Parses all `.rdp` files in the target folder, extracts hostnames, and adds each one to `HKCU\...\Terminal Server Client\Servers\<hostname>`. This suppresses the unknown-publisher warning for those specific hosts.
+### Mode 2 — Per-server trust (`-RdpFolder` / `-AutoScan`)
+Parses all `.rdp` files found, extracts hostnames, and adds each one to
+`HKCU\...\Terminal Server Client\Servers\<hostname>`. Suppresses the unknown-publisher warning per host.
+
+**Auto-scan locations:** Desktop, Public Desktop, Documents, Downloads, OneDrive (personal + business), Network Shortcuts.
 
 ### Mode 3 — Certificate signing (`-SignFiles`)
 1. Creates (or reuses) a self-signed code-signing certificate in `CurrentUser\My` valid for 10 years
 2. Adds the certificate to `CurrentUser\TrustedPublisher`
 3. Registers the certificate thumbprint in `HKCU\Software\Policies\Microsoft\Windows NT\Terminal Services\TrustedCertThumbprints`
-4. Signs every `.rdp` file in the target folder using `RDPSign.exe`
+4. Signs every `.rdp` file found using `RDPSign.exe`
 
 ## Requirements
 
