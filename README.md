@@ -88,7 +88,7 @@ Parses all `.rdp` files found, extracts hostnames, and adds each one to
 - Windows 10 / 11
 - PowerShell 5.1 or later
 - `RDPSign.exe` (present by default in `%SystemRoot%\System32`) — only needed for `-SignFiles`
-- No administrator rights required
+- Administrator rights — the script auto-elevates via UAC if not already running as admin
 
 ## Undo
 

@@ -66,6 +66,23 @@ param(
     [switch]$Help
 )
 
+# Self-elevate via UAC if not running as administrator
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $argList = [System.Collections.Generic.List[string]]::new()
+    $argList.AddRange([string[]]@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`""))
+    foreach ($key in $PSBoundParameters.Keys) {
+        $val = $PSBoundParameters[$key]
+        if ($val -is [switch]) {
+            if ($val.IsPresent) { $argList.Add("-$key") }
+        } else {
+            $argList.Add("-$key")
+            $argList.Add("`"$val`"")
+        }
+    }
+    Start-Process powershell.exe -Verb RunAs -ArgumentList $argList
+    exit
+}
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -225,11 +242,8 @@ function Invoke-Undo {
     Write-Step "Removing RedirectionWarningDialogVersion (HKCU)"
     Remove-RegistryValue -Path $tscPath -Name 'RedirectionWarningDialogVersion'
 
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($isAdmin) {
-        Write-Step "Removing RedirectionWarningDialogVersion (HKLM)"
-        Remove-RegistryValue -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client' -Name 'RedirectionWarningDialogVersion'
-    }
+    Write-Step "Removing RedirectionWarningDialogVersion (HKLM)"
+    Remove-RegistryValue -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client' -Name 'RedirectionWarningDialogVersion'
 
     Write-Step "Removing trusted RDP publisher thumbprints (HKCU policy)"
     $policyPath = 'HKCU:\Software\Policies\Microsoft\Windows NT\Terminal Services'
@@ -252,16 +266,10 @@ function Set-LaunchConsent {
     Write-Step "RedirectionWarningDialogVersion = 1 (HKCU)"
     Set-RegistryValue -Path $tscPath -Name 'RedirectionWarningDialogVersion' -Value 1
 
-    # Machine-wide policy key — suppresses the "unknown publisher" orange dialog.
-    # Requires admin; skip silently if not elevated.
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($isAdmin) {
-        $hklmPath = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client'
-        Write-Step "RedirectionWarningDialogVersion = 1 (HKLM — machine policy)"
-        Set-RegistryValue -Path $hklmPath -Name 'RedirectionWarningDialogVersion' -Value 1
-    } else {
-        Write-Warn "Not running as admin — HKLM machine policy key skipped. Re-run as admin for full suppression of 'unknown publisher' dialog."
-    }
+    # Machine-wide policy key — suppresses the "unknown publisher" orange dialog
+    $hklmPath = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client'
+    Write-Step "RedirectionWarningDialogVersion = 1 (HKLM — machine policy)"
+    Set-RegistryValue -Path $hklmPath -Name 'RedirectionWarningDialogVersion' -Value 1
 
     Write-Ok "Launch consent dialog suppressed."
 }
