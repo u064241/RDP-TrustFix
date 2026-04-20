@@ -286,7 +286,7 @@ function Get-RdpFileList {
             ForEach-Object { if ($seen.Add($_.FullName)) { $files.Add($_) } }
     }
 
-    return $files
+    Write-Output -NoEnumerate $files
 }
 
 #endregion
@@ -310,7 +310,7 @@ function Get-RdpServers {
         }
     }
 
-    return $servers
+    Write-Output -NoEnumerate $servers
 }
 
 function Set-TrustedServers {
