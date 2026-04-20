@@ -222,8 +222,14 @@ function Invoke-Undo {
     Write-Step "Removing RdpLaunchConsentAccepted"
     Remove-RegistryValue -Path $tscPath -Name 'RdpLaunchConsentAccepted'
 
-    Write-Step "Removing RedirectionWarningDialogVersion"
+    Write-Step "Removing RedirectionWarningDialogVersion (HKCU)"
     Remove-RegistryValue -Path $tscPath -Name 'RedirectionWarningDialogVersion'
+
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($isAdmin) {
+        Write-Step "Removing RedirectionWarningDialogVersion (HKLM)"
+        Remove-RegistryValue -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client' -Name 'RedirectionWarningDialogVersion'
+    }
 
     Write-Step "Removing trusted RDP publisher thumbprints (HKCU policy)"
     $policyPath = 'HKCU:\Software\Policies\Microsoft\Windows NT\Terminal Services'
@@ -243,9 +249,19 @@ function Set-LaunchConsent {
     Write-Step "RdpLaunchConsentAccepted = 1"
     Set-RegistryValue -Path $tscPath -Name 'RdpLaunchConsentAccepted' -Value 1
 
-    # Keeps the warning dialog at version 1 (suppresses newer, stricter prompts)
-    Write-Step "RedirectionWarningDialogVersion = 1"
+    Write-Step "RedirectionWarningDialogVersion = 1 (HKCU)"
     Set-RegistryValue -Path $tscPath -Name 'RedirectionWarningDialogVersion' -Value 1
+
+    # Machine-wide policy key — suppresses the "unknown publisher" orange dialog.
+    # Requires admin; skip silently if not elevated.
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($isAdmin) {
+        $hklmPath = 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client'
+        Write-Step "RedirectionWarningDialogVersion = 1 (HKLM — machine policy)"
+        Set-RegistryValue -Path $hklmPath -Name 'RedirectionWarningDialogVersion' -Value 1
+    } else {
+        Write-Warn "Not running as admin — HKLM machine policy key skipped. Re-run as admin for full suppression of 'unknown publisher' dialog."
+    }
 
     Write-Ok "Launch consent dialog suppressed."
 }
